@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="p-5 mb-4 bg-white rounded-3 shadow-sm border">
+    <div class="container-fluid py-5">
+      <h1 class="display-5 fw-bold text-primary">Welcome to AuthApp</h1>
+      <p class="col-md-8 fs-4 text-muted">A secure Django authentication system using PostgreSQL, Custom User Models, and Google OAuth.</p>
+      
+      {% if user.is_authenticated %}
+          <div class="alert alert-success mt-4">
+              <h4 class="alert-heading">You are logged in!</h4>
+              <p>Email: <strong>{{ user.email }}</strong></p>
+              <hr>
+              <p class="mb-0">You can now access protected areas of this application.</p>
+          </div>
+      {% else %}
+          <div class="mt-4">
+            <a href="{% url 'account_login' %}" class="btn btn-primary btn-lg px-4 me-md-2">Login</a>
+            <a href="{% url 'account_signup' %}" class="btn btn-outline-secondary btn-lg px-4">Create Account</a>
+          </div>
+      {% endif %}
+    </div>
+</div>
+{% endblock %}

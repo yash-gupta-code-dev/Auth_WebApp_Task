@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="col-md-5">
+        <div class="card shadow-lg">
+            <div class="card-body p-5">
+                <h2 class="text-center fw-bold mb-4">Sign In</h2>
+
+                <!-- GOOGLE LOGIN -->
+                <div class="d-grid mb-3">
+                    <a href="{% load socialaccount %}{% provider_login_url 'google' method='oauth2' %}" class="btn btn-danger py-2">
+                        <i class="bi bi-google"></i> Sign in with Google
+                    </a>
+                </div>
+
+                <div class="text-center text-muted mb-3">- OR -</div>
+
+                <div id="error-message" class="alert alert-danger" style="display: none;"></div>
+
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Email, Username, or Phone</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="e.g. john@example.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        <button class="btn btn-primary py-2 fw-bold" type="submit">Login</button>
+                    </div>
+                </form>
+
+                <div class="text-center mt-4">
+                    <!-- UPDATED LINK HERE -->
+                    <a href="{% url 'account_reset_password' %}" class="text-decoration-none small">Forgot Password?</a>
+                    <br>
+                    <span class="text-muted small">New here?</span> <a href="{% url 'account_signup' %}" class="fw-bold text-decoration-none">Create an account</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('login-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const inputUsername = document.getElementById('username').value; // What user typed (e.g., Phone)
+    const password = document.getElementById('password').value;
+    const errorMessage = document.getElementById('error-message');
+    const submitBtn = this.querySelector('button[type="submit"]');
+
+    errorMessage.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Logging in...";
+
+    fetch("/api/login/", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ username: inputUsername, password: password })
+    })
+    .then(async response => {
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            if (!response.ok) throw new Error(data.error || 'Invalid credentials');
+            return data;
+        } catch (err) {
+            if (!response.ok) throw new Error("Server Error");
+            throw err;
+        }
+    })
+    .then(data => {
+        if (data.token) {
+            // 1. Save Token
+            localStorage.setItem('authToken', data.token);
+
+            // 2. FIX: Save the REAL username/email returned by the backend
+            //    (Do NOT use 'inputUsername' here, because that might be a phone number)
+            localStorage.setItem('username', data.username); 
+            localStorage.setItem('email', data.email);
+            
+            window.location.href = "{% url 'account_dashboard' %}";
+        }
+    })
+    .catch(error => {
+        errorMessage.textContent = error.message;
+        errorMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Login";
+    });
+});
+</script>
+{% endblock %}

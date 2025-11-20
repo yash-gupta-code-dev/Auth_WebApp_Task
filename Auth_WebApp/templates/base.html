@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en" class="h-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Django Auth App{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body class="d-flex flex-column h-100 bg-light">
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="{% url 'home' %}">
+            <i class="bi bi-shield-lock-fill"></i> AuthApp
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto align-items-center">
+            <!-- Unauthenticated User Links -->
+            <div id="guest-links">
+                <li class="nav-item d-inline-block">
+                    <a class="nav-link px-3" href="{% url 'account_login' %}">Login</a>
+                </li>
+                <li class="nav-item d-inline-block ms-2">
+                    <a class="btn btn-primary btn-sm px-3 rounded-pill" href="{% url 'account_signup' %}">Sign Up</a>
+                </li>
+            </div>
+
+            <!-- Authenticated User Links -->
+            <div id="auth-links" style="display: none;">
+                <li class="nav-item me-3 d-inline-block">
+                    <a class="nav-link text-light" href="{% url 'account_dashboard' %}">
+                        <i class="bi bi-person-circle"></i> <span id="navbar-username"></span>
+                    </a>
+                </li>
+                <li class="nav-item d-inline-block">
+                    <button id="logout-button" class="btn btn-outline-danger btn-sm">Logout</button>
+                </li>
+            </div>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-shrink-0">
+        <div class="container mt-4 mb-5">
+            {% block content %}
+            {% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-white border-top">
+        <div class="container text-center text-muted">
+            <span class="small">&copy; 2025 My Secure Django App. Built with Bootstrap 5.</span>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+        <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 1. Check Django Session (Server-side) via Template Tag
+        const serverIsAuthenticated = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+        const serverUsername = "{{ user.username }}";
+        
+        // 2. Check LocalStorage (Client-side)
+        const token = localStorage.getItem('authToken');
+
+        const guestLinks = document.getElementById('guest-links');
+        const authLinks = document.getElementById('auth-links');
+        const navbarUsername = document.getElementById('navbar-username');
+
+        // LOGIC: Logged in if EITHER server session exists OR token exists
+        if (serverIsAuthenticated || token) {
+            guestLinks.style.display = 'none';
+            authLinks.style.display = 'block';
+            
+            // Prefer server username if available (Google login), else localStorage
+            if (serverIsAuthenticated) {
+                navbarUsername.textContent = serverUsername;
+            } else {
+                navbarUsername.textContent = localStorage.getItem('username');
+            }
+        } else {
+            guestLinks.style.display = 'block';
+            authLinks.style.display = 'none';
+        }
+
+        // LOGOUT LOGIC
+        document.getElementById('logout-button').addEventListener('click', function() {
+            // 1. Clear LocalStorage
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
+            localStorage.removeItem('email');
+
+            // 2. If Server Authenticated (Google), we must hit the django logout url
+            if (serverIsAuthenticated) {
+                // Create a form to post to django logout
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = "{% url 'account_logout' %}";
+                
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = '{{ csrf_token }}';
+                form.appendChild(csrfInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            } else {
+                // 3. If API Authenticated, hit the API logout
+                if (token) {
+                    fetch("{% url 'api_logout' %}", {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Token ${token}`,
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        }
+                    }).finally(() => {
+                        window.location.href = "{% url 'home' %}";
+                    });
+                } else {
+                    window.location.href = "{% url 'home' %}";
+                }
+            }
+        });
+    });
+    </script>
+</body>
+</html>

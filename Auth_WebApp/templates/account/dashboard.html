@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <!-- Welcome Section -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0"><i class="bi bi-speedometer2"></i> User Dashboard</h2>
+                </div>
+                <div class="card-body">
+                    <h4 id="welcome-message" class="card-title">Welcome!</h4>
+                    <p class="card-text text-muted">You have successfully authenticated into the secure portal.</p>
+                    
+                    <hr>
+                    
+                    <!-- User Details List -->
+                    <h5 class="mb-3 text-primary">Your Profile Details</h5>
+                    <ul class="list-group list-group-flush rounded">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong><i class="bi bi-person"></i> Username:</strong>
+                            <span id="user-username" class="badge bg-light text-dark fs-6">Loading...</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong><i class="bi bi-envelope"></i> Email:</strong>
+                            <span id="user-email" class="text-muted">Loading...</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <strong><i class="bi bi-telephone"></i> Phone Number:</strong>
+                            <span id="user-phone" class="text-muted">Loading...</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Section (Downloads) -->
+    <!-- FIX: We wrap the row in a div with the ID. The JS toggles this wrapper. -->
+    <!-- The inner row keeps 'display: flex' so 'justify-content-center' still works. -->
+    <div id="admin-section" style="display: none;"> 
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Admin Zone</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Export Registry:</strong> Download the complete user database (10,000+ records).</p>
+                        <div class="d-flex gap-3">
+                            <button onclick="downloadData('{% url 'api_download_csv' %}', 'all_users.csv')" class="btn btn-outline-success flex-fill">
+                                <i class="bi bi-file-earmark-spreadsheet-fill"></i> Download CSV
+                            </button>
+                            <button onclick="downloadData('{% url 'api_download_pdf' %}', 'all_users.pdf')" class="btn btn-outline-danger flex-fill">
+                                <i class="bi bi-file-earmark-pdf-fill"></i> Download PDF
+                            </button>
+                        </div>
+                        <small class="text-muted mt-2 d-block">* Only accessible by Staff/Superusers.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT LOGIC -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+   
+    // A. Check Django Session (Google Login / Superuser Login)
+    const serverIsAuth = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+    const serverUser = "{{ user.username }}";
+    const serverEmail = "{{ user.email }}";
+    const serverPhone = "{{ user.phone_number|default:'N/A' }}"; 
+    const serverIsStaff = "{{ user.is_staff|yesno:'true,false' }}" === "true";
+
+    // B. Check LocalStorage (API / Manual Login)
+    const token = localStorage.getItem('authToken');
+    const localUser = localStorage.getItem('username');
+    const localEmail = localStorage.getItem('email');
+    const localPhone = localStorage.getItem('phone_number') || "N/A"; 
+
+  
+    if (serverIsAuth) {
+        // --- SCENARIO 1: LOGGED IN VIA GOOGLE/SESSION ---
+        document.getElementById('welcome-message').innerText = `Welcome, ${serverUser}!`;
+        document.getElementById('user-username').innerText = serverUser;
+        document.getElementById('user-email').innerText = serverEmail;
+        document.getElementById('user-phone').innerText = serverPhone;
+
+        // Show Admin Panel if Django says user is staff
+        if (serverIsStaff) {
+            document.getElementById('admin-section').style.display = 'block';
+        }
+
+    } else if (token && localUser) {
+        // --- SCENARIO 2: LOGGED IN VIA API TOKEN ---
+        document.getElementById('welcome-message').innerText = `Welcome, ${localUser}!`;
+        document.getElementById('user-username').innerText = localUser;
+        document.getElementById('user-email').innerText = localEmail;
+        document.getElementById('user-phone').innerText = localPhone;
+
+        // API users: We assume staff/admin to show button (API will block actual download if not)
+        document.getElementById('admin-section').style.display = 'block'; 
+        
+    } else {
+        // --- SCENARIO 3: NOT LOGGED IN ---
+        window.location.href = "{% url 'account_login' %}";
+    }
+});
+
+
+function downloadData(url, filename) {
+    const token = localStorage.getItem('authToken');
+    const serverIsAuth = "{{ user.is_authenticated|yesno:'true,false' }}" === "true";
+    
+    let headers = {};
+
+    if (token && !serverIsAuth) {
+        headers['Authorization'] = `Token ${token}`;
+    }
+
+    const btn = event.currentTarget;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Downloading...`;
+    btn.disabled = true;
+
+    fetch(url, {
+        method: 'GET',
+        headers: headers
+    })
+    .then(async response => {
+        if (response.status === 403) {
+            throw new Error("⛔ Access Denied: You do not have admin permissions.");
+        }
+        if (response.status === 401) {
+            throw new Error("Please login again.");
+        }
+        if (!response.ok) {
+            throw new Error("Download failed.");
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    })
+    .catch(err => {
+        alert(err.message);
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
+{% endblock %}
